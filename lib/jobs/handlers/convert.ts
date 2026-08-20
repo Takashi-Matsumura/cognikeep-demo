@@ -9,6 +9,8 @@ import { chunkMarkdown } from "../../convert/markdown.ts";
 import { buildMarkdownFile, type DocFrontmatter } from "../../convert/frontmatter.ts";
 import { tokenize } from "../../search/segment.ts";
 import { indexChunk, removeChunksForVersionFromFts } from "../../search/fts.ts";
+import { simhash48 } from "../../governance/simhash.ts";
+import { runDedupeScanForVersion } from "../../governance/dedupe.ts";
 
 interface VersionRow {
   id: string;
@@ -52,6 +54,7 @@ export async function processConvertJob(versionId: string): Promise<void> {
   const now = Date.now();
   const markdownBody = result.markdown;
   const contentHash = crypto.createHash("sha256").update(markdownBody).digest("hex");
+  const simhash = simhash48(markdownBody);
 
   const frontmatter: DocFrontmatter = {
     docId: document.id,
@@ -87,7 +90,7 @@ export async function processConvertJob(versionId: string): Promise<void> {
     `UPDATE document_versions
      SET markdown = ?, frontmatter = ?, page_count = ?, sheet_names = ?,
          conversion_engine = ?, conversion_confidence = ?, conversion_metrics = ?,
-         converted_at = ?, content_hash = ?
+         converted_at = ?, content_hash = ?, simhash = ?
      WHERE id = ?`,
   ).run(
     markdownBody,
@@ -99,6 +102,7 @@ export async function processConvertJob(versionId: string): Promise<void> {
     JSON.stringify(quality.metrics),
     now,
     contentHash,
+    simhash,
     versionId,
   );
 
@@ -140,4 +144,7 @@ export async function processConvertJob(versionId: string): Promise<void> {
       body: chunk.text,
     });
   }
+
+  // 重複・類似検知（実装計画 §6-C 段1〜3）。他文書の現行版とだけ比較する
+  runDedupeScanForVersion(versionId);
 }

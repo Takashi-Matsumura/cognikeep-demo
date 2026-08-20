@@ -2,18 +2,10 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { listDocuments } from "@/lib/db/queries/documents";
+import { listDocumentsWithFreshness } from "@/lib/db/queries/governance";
 import { ConversionBadge } from "@/components/conversion-badge";
-
-const DOC_TYPE_LABEL: Record<string, string> = {
-  regulation: "規程",
-  manual: "手順書",
-  contract: "契約",
-  minutes: "議事録",
-  report: "報告書",
-  slide: "スライド",
-  sheet: "表計算",
-  other: "その他",
-};
+import { FreshnessBadge } from "@/components/freshness-badge";
+import { docTypeLabel } from "@/lib/doc-type";
 
 function formatDate(ms: number): string {
   return new Date(ms).toLocaleString("ja-JP", {
@@ -27,6 +19,7 @@ function formatDate(ms: number): string {
 
 export default async function DocumentsPage() {
   const documents = listDocuments();
+  const freshnessById = new Map(listDocumentsWithFreshness().map((f) => [f.id, f]));
 
   return (
     <div className="flex flex-col gap-6">
@@ -46,36 +39,45 @@ export default async function DocumentsPage() {
               <TableHead>タイトル</TableHead>
               <TableHead>種別</TableHead>
               <TableHead>変換</TableHead>
+              <TableHead>鮮度</TableHead>
               <TableHead>チャンク数</TableHead>
               <TableHead>更新日時</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {documents.map((doc) => (
-              <TableRow key={doc.id}>
-                <TableCell className="font-medium">
-                  <Link href={`/documents/${doc.id}`} className="hover:underline">
-                    {doc.title}
-                  </Link>
-                  {doc.originalFilename && (
-                    <div className="text-xs text-muted-foreground">{doc.originalFilename}</div>
-                  )}
-                </TableCell>
-                <TableCell>
-                  <Badge variant="outline">{DOC_TYPE_LABEL[doc.docType] ?? doc.docType}</Badge>
-                </TableCell>
-                <TableCell>
-                  <ConversionBadge
-                    engine={doc.conversionEngine}
-                    confidence={doc.conversionConfidence}
-                  />
-                </TableCell>
-                <TableCell>{doc.chunkCount}</TableCell>
-                <TableCell className="text-sm text-muted-foreground">
-                  {formatDate(doc.updatedAt)}
-                </TableCell>
-              </TableRow>
-            ))}
+            {documents.map((doc) => {
+              const freshness = freshnessById.get(doc.id);
+              return (
+                <TableRow key={doc.id}>
+                  <TableCell className="font-medium">
+                    <Link href={`/documents/${doc.id}`} className="hover:underline">
+                      {doc.title}
+                    </Link>
+                    {doc.originalFilename && (
+                      <div className="text-xs text-muted-foreground">{doc.originalFilename}</div>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="outline">{docTypeLabel(doc.docType)}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    <ConversionBadge
+                      engine={doc.conversionEngine}
+                      confidence={doc.conversionConfidence}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    {freshness && (
+                      <FreshnessBadge score={freshness.freshnessScore} band={freshness.band} />
+                    )}
+                  </TableCell>
+                  <TableCell>{doc.chunkCount}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {formatDate(doc.updatedAt)}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       )}
