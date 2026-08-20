@@ -14,11 +14,7 @@ export async function POST(request: Request) {
     files.map(async (file) => {
       try {
         const buffer = Buffer.from(await file.arrayBuffer());
-        const result = await ingestLocalUpload(
-          file.name,
-          file.type || "application/octet-stream",
-          buffer,
-        );
+        const result = await ingestLocalUpload(file.name, buffer);
         return {
           filename: file.name,
           ok: true as const,

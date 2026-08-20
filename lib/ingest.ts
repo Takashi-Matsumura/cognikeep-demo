@@ -2,6 +2,7 @@ import { ulid } from "ulid";
 import { getDb } from "./db/client.ts";
 import { getBlobStore } from "./storage/blob.ts";
 import { titleFromFilename } from "./convert/frontmatter.ts";
+import { isUploadableExtension, safeContentTypeForFilename } from "./files/mime.ts";
 
 export interface IngestResult {
   documentId: string;
@@ -21,12 +22,20 @@ export interface IngestResult {
  * content-addressed な blob store のおかげで、同一バイト列の再アップロードは
  * sha256 で検知でき、無駄な変換ジョブを積まずに既存文書を指すだけで済む
  * （完全重複検知の第1段。実装計画 §6-C）。
+ *
+ * セキュリティ: 対応拡張子（docx/xlsx/pdf）以外は保存前に拒否する。
+ * クライアントが送ってくる MIME（file.type）は偽装可能なので信頼せず、
+ * サーバ側の許可リストから Content-Type を導出して DB に記録する
+ * （/api/files/[sha256] の配信時も同じ許可リストのみを参照する）。
  */
-export async function ingestLocalUpload(
-  filename: string,
-  mimeType: string,
-  buffer: Buffer,
-): Promise<IngestResult> {
+export async function ingestLocalUpload(filename: string, buffer: Buffer): Promise<IngestResult> {
+  if (!isUploadableExtension(filename)) {
+    throw new Error(
+      `対応していない形式です: ${filename}（docx / xlsx / pdf のみアップロードできます）`,
+    );
+  }
+  const mimeType = safeContentTypeForFilename(filename);
+
   const blobStore = getBlobStore();
   const { sha256 } = await blobStore.put(buffer);
 
