@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# cognikeep: 原本ファイル・DB・Markdown ミラーはローカル専用データ
+/storage/*.db
+/storage/*.db-*
+/storage/blobs/
+/storage/md/
+/storage/inbox/
