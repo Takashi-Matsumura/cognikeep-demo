@@ -1,0 +1,91 @@
+import Link from "next/link";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { searchChunks, groupHitsByDocument } from "@/lib/search/fts";
+import { highlightText } from "@/lib/search/highlight";
+import { ConversionBadge } from "@/components/conversion-badge";
+
+function Highlighted({ text, query }: { text: string; query: string }) {
+  const snippets = highlightText(text, query, { windowSize: 140, maxSnippets: 1 });
+  const snippet = snippets[0];
+  if (!snippet) return null;
+  return (
+    <p className="text-sm text-muted-foreground">
+      {snippet.charOffset > 0 && "…"}
+      {snippet.segments.map((seg, i) =>
+        seg.hit ? (
+          <mark key={i} className="rounded bg-yellow-200 px-0.5 text-foreground dark:bg-yellow-500/40">
+            {seg.text}
+          </mark>
+        ) : (
+          <span key={i}>{seg.text}</span>
+        ),
+      )}
+      …
+    </p>
+  );
+}
+
+export default async function SearchPage(props: PageProps<"/search">) {
+  const { q } = await props.searchParams;
+  const query = typeof q === "string" ? q : "";
+
+  const hits = query ? searchChunks(query, {}, 50) : [];
+  const grouped = groupHitsByDocument(hits);
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">検索</h1>
+        {query && (
+          <p className="text-sm text-muted-foreground">
+            「{query}」の検索結果: {grouped.length} 文書 / {hits.length} 箇所
+          </p>
+        )}
+      </div>
+
+      {!query ? (
+        <p className="text-sm text-muted-foreground">
+          上部の検索ボックスに日本語のキーワードを入力してください。
+        </p>
+      ) : grouped.length === 0 ? (
+        <p className="text-sm text-muted-foreground">該当する文書が見つかりませんでした。</p>
+      ) : (
+        <div className="flex flex-col gap-4">
+          {grouped.map((doc) => (
+            <Card key={doc.documentId}>
+              <CardContent className="flex flex-col gap-3 py-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Link
+                    href={`/documents/${doc.documentId}?q=${encodeURIComponent(query)}`}
+                    className="font-medium hover:underline"
+                  >
+                    {doc.title}
+                  </Link>
+                  <Badge variant="outline">{doc.docType}</Badge>
+                  <ConversionBadge engine={doc.conversionEngine} confidence={null} />
+                </div>
+                <div className="flex flex-col gap-2">
+                  {doc.hits.map((hit) => (
+                    <div key={hit.chunkId} className="border-l-2 pl-3">
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        {hit.headingPath && <span>{hit.headingPath}</span>}
+                        {hit.pageFrom != null && <span>p.{hit.pageFrom}</span>}
+                      </div>
+                      <Highlighted text={hit.text} query={query} />
+                    </div>
+                  ))}
+                  {doc.extraHitCount > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      他 {doc.extraHitCount} 箇所
+                    </p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
