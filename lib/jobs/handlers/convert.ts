@@ -12,6 +12,7 @@ import { tokenize } from "../../search/segment.ts";
 import { indexChunk, removeChunksForVersionFromFts } from "../../search/fts.ts";
 import { simhash48 } from "../../governance/simhash.ts";
 import { runDedupeScanForVersion } from "../../governance/dedupe.ts";
+import { getEmbeddingProvider, encodeEmbedding } from "../../llm/embeddings.ts";
 
 interface VersionRow {
   id: string;
@@ -144,6 +145,7 @@ export async function processConvertJob(versionId: string): Promise<void> {
     VALUES (?,?,?,?,?,?,?,?,?,?,?)
   `);
 
+  const insertedChunkIds: number[] = [];
   for (const chunk of chunks) {
     const info = insertChunk.run(
       versionId,
@@ -159,12 +161,26 @@ export async function processConvertJob(versionId: string): Promise<void> {
       chunk.text.length,
     );
     const chunkId = Number(info.lastInsertRowid);
+    insertedChunkIds.push(chunkId);
     indexChunk({
       chunkId,
       title: document.title,
       headingPath: chunk.headingPath,
       body: chunk.text,
     });
+  }
+
+  // セマンティック検索用の埋め込み（bge-m3）。あくまで「あれば良い」機能なので
+  // 失敗してもチャンク挿入自体は既に完了済み。キーワード検索は失敗の影響を受けない。
+  try {
+    const provider = getEmbeddingProvider();
+    const vectors = await provider.embed(chunks.map((c) => c.text));
+    const updateEmbedding = db.prepare(`UPDATE chunks SET embedding = ? WHERE id = ?`);
+    insertedChunkIds.forEach((chunkId, i) => {
+      updateEmbedding.run(encodeEmbedding(vectors[i]), chunkId);
+    });
+  } catch (err) {
+    console.error(`[convert] 埋め込み計算に失敗、キーワード検索のみ有効: ${(err as Error).message}`);
   }
 
   // 重複・類似検知（実装計画 §6-C 段1〜3）。他文書の現行版とだけ比較する
