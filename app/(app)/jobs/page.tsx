@@ -44,6 +44,7 @@ export default async function JobsPage() {
             <TableRow>
               <TableHead>種別</TableHead>
               <TableHead>状態</TableHead>
+              <TableHead>メッセージ</TableHead>
               <TableHead>試行回数</TableHead>
               <TableHead>作成日時</TableHead>
               <TableHead>完了日時</TableHead>
@@ -58,6 +59,9 @@ export default async function JobsPage() {
                   <Badge variant={STATUS_VARIANT[job.status] ?? "outline"}>
                     {STATUS_LABEL[job.status] ?? job.status}
                   </Badge>
+                </TableCell>
+                <TableCell className="max-w-xs truncate text-sm text-muted-foreground">
+                  {job.message}
                 </TableCell>
                 <TableCell>{job.attempts}</TableCell>
                 <TableCell className="text-sm text-muted-foreground">

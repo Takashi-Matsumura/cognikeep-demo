@@ -198,3 +198,39 @@ export function listOpenRelations(): RelationRow[] {
 export function updateRelationStatus(id: string, status: "dismissed" | "merged" | "open"): void {
   getDb().prepare(`UPDATE document_relations SET status = ? WHERE id = ?`).run(status, id);
 }
+
+export interface FindingRow {
+  id: string;
+  kind: string;
+  severity: string;
+  title: string;
+  summary: string | null;
+  documentIds: string; // JSON配列
+  detail: string | null; // JSON
+  citations: string | null; // JSON
+  confidence: number | null;
+  status: string;
+  detectedAt: number;
+}
+
+export function listOpenFindings(): FindingRow[] {
+  const db = getDb();
+  return db
+    .prepare(
+      `SELECT id, kind, severity, title, summary, document_ids as documentIds,
+              detail, citations, confidence, status, detected_at as detectedAt
+       FROM findings WHERE status = 'open' ORDER BY
+         CASE severity WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END, detected_at DESC`,
+    )
+    .all() as unknown as FindingRow[];
+}
+
+export function getFindingDocumentTitles(documentIds: string[]): Map<string, string> {
+  if (documentIds.length === 0) return new Map();
+  const db = getDb();
+  const placeholders = documentIds.map(() => "?").join(",");
+  const rows = db
+    .prepare(`SELECT id, title FROM documents WHERE id IN (${placeholders})`)
+    .all(...documentIds) as Array<{ id: string; title: string }>;
+  return new Map(rows.map((r) => [r.id, r.title]));
+}

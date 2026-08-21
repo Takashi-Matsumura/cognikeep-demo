@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { MarkdownView } from "@/components/markdown-view";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -80,9 +79,7 @@ export default async function DocumentDetailPage(props: PageProps<"/documents/[i
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_300px]">
           <Card>
             <CardContent className="prose prose-sm max-w-none py-6 dark:prose-invert prose-headings:scroll-mt-20">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {stripAnchors(version.markdown)}
-              </ReactMarkdown>
+              <MarkdownView>{stripAnchors(version.markdown)}</MarkdownView>
             </CardContent>
           </Card>
 

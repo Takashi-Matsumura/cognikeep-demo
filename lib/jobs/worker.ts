@@ -1,5 +1,7 @@
 import { getDb } from "../db/client.ts";
 import { processConvertJob } from "./handlers/convert.ts";
+import { processCategorizeProposeJob, processCategorizeClassifyAllJob } from "./handlers/categorize.ts";
+import { processContradictionScanJob } from "./handlers/contradiction.ts";
 
 interface JobRow {
   id: string;
@@ -41,10 +43,23 @@ async function processNextJob(): Promise<boolean> {
         await processConvertJob(payload.versionId);
         break;
       }
+      case "categorize_propose": {
+        await processCategorizeProposeJob();
+        break;
+      }
+      case "categorize_classify_all": {
+        await processCategorizeClassifyAllJob(job.id);
+        break;
+      }
+      case "contradiction_scan": {
+        await processContradictionScanJob(job.id);
+        break;
+      }
       default:
         throw new Error(`未知のジョブ種別: ${job.kind}`);
     }
-    db.prepare(`UPDATE ingest_jobs SET status = 'succeeded', progress = 1, message = NULL, finished_at = ? WHERE id = ?`).run(
+    // message はハンドラが最終サマリを残していることがあるので上書きしない
+    db.prepare(`UPDATE ingest_jobs SET status = 'succeeded', progress = 1, finished_at = ? WHERE id = ?`).run(
       Date.now(),
       job.id,
     );

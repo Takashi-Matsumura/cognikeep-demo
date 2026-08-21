@@ -27,7 +27,11 @@ function blobPath(baseDir: string, sha256: string): string {
 }
 
 export class LocalBlobStore implements BlobStore {
-  constructor(private readonly baseDir: string) {}
+  private readonly baseDir: string;
+
+  constructor(baseDir: string) {
+    this.baseDir = baseDir;
+  }
 
   async put(data: Buffer): Promise<{ sha256: string; bytes: number; isNew: boolean }> {
     const sha256 = crypto.createHash("sha256").update(data).digest("hex");

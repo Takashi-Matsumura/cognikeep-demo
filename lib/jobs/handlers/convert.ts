@@ -3,8 +3,9 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { getDb } from "../../db/client.ts";
 import { getBlobStore } from "../../storage/blob.ts";
-import { convertLocally } from "../../convert/index.ts";
-import { assessQuality } from "../../convert/quality.ts";
+import { convertLocally, extensionOf } from "../../convert/index.ts";
+import { assessQuality, needsFallback } from "../../convert/quality.ts";
+import { convertPdfWithVisionLlm } from "../../convert/llm-fallback.ts";
 import { chunkMarkdown } from "../../convert/markdown.ts";
 import { buildMarkdownFile, type DocFrontmatter } from "../../convert/frontmatter.ts";
 import { tokenize } from "../../search/segment.ts";
@@ -48,8 +49,26 @@ export async function processConvertJob(versionId: string): Promise<void> {
   if (!document) throw new Error(`document not found: ${version.document_id}`);
 
   const buffer = await getBlobStore().get(version.original_sha256);
-  const { result, engine } = await convertLocally(version.original_filename, buffer);
-  const quality = assessQuality(result.pageTexts);
+  let { result, engine } = await convertLocally(version.original_filename, buffer);
+  let quality = assessQuality(result.pageTexts);
+
+  // AI変換フォールバック: ローカル変換の品質が閾値未満の PDF のみ対象。
+  // ローカルの画像対応 LLM（Qwen3VL 想定）にページ画像を読ませる。
+  // 外部 API には一切送らないため、社内文書が外に出ることはない。
+  if (needsFallback(quality.confidence) && extensionOf(version.original_filename) === "pdf") {
+    try {
+      const visionResult = await convertPdfWithVisionLlm(buffer);
+      result = visionResult;
+      engine = "local-llm:qwen3vl";
+      quality = assessQuality(result.pageTexts);
+    } catch (err) {
+      console.error(
+        `[convert] AI変換フォールバックに失敗したため、ローカル変換結果をそのまま使用します: ${
+          (err as Error).message
+        }`,
+      );
+    }
+  }
 
   const now = Date.now();
   const markdownBody = result.markdown;
@@ -75,7 +94,8 @@ export async function processConvertJob(versionId: string): Promise<void> {
       engine,
       confidence: quality.confidence,
       metrics: quality.metrics,
-      costUsd: null,
+      // ローカル LLM のみを使うため課金は発生しない
+      costUsd: 0,
       convertedAt: now,
     },
     title: document.title,
@@ -90,6 +110,7 @@ export async function processConvertJob(versionId: string): Promise<void> {
     `UPDATE document_versions
      SET markdown = ?, frontmatter = ?, page_count = ?, sheet_names = ?,
          conversion_engine = ?, conversion_confidence = ?, conversion_metrics = ?,
+         conversion_cost_usd = ?,
          converted_at = ?, content_hash = ?, simhash = ?
      WHERE id = ?`,
   ).run(
@@ -100,6 +121,7 @@ export async function processConvertJob(versionId: string): Promise<void> {
     engine,
     quality.confidence,
     JSON.stringify(quality.metrics),
+    frontmatter.conversion.costUsd,
     now,
     contentHash,
     simhash,
