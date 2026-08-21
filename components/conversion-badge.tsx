@@ -11,10 +11,10 @@ export function ConversionBadge({
     return <Badge variant="secondary">未変換</Badge>;
   }
 
-  const isAi = engine.startsWith("claude:");
+  const isAi = engine.startsWith("local-llm:");
   const isLowConfidence = confidence != null && confidence < 0.6;
   const label = isAi
-    ? `AI変換 (${engine.replace("claude:", "")})`
+    ? `AI変換 (${engine.replace("local-llm:", "")})`
     : `ローカル変換${confidence != null ? ` (信頼度 ${confidence.toFixed(2)})` : ""}`;
 
   return (

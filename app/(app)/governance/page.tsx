@@ -14,7 +14,7 @@ export default async function GovernancePage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
         <Link href="/governance/duplicates">
           <Card className="transition-colors hover:bg-secondary/50">
             <CardHeader>
@@ -27,6 +27,17 @@ export default async function GovernancePage() {
               <p className="mt-1 text-xs text-muted-foreground">
                 sha256 / 内容ハッシュ / SimHash による自動検知
               </p>
+            </CardContent>
+          </Card>
+        </Link>
+        <Link href="/governance/contradictions">
+          <Card className="transition-colors hover:bg-secondary/50">
+            <CardHeader>
+              <CardTitle className="text-sm font-medium text-muted-foreground">矛盾候補</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-semibold">{summary.openFindingsCount}</div>
+              <p className="mt-1 text-xs text-muted-foreground">ローカル LLM による検知</p>
             </CardContent>
           </Card>
         </Link>
@@ -55,20 +66,6 @@ export default async function GovernancePage() {
           </Card>
         </Link>
       </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm font-medium text-muted-foreground">
-            矛盾検知（M3 で実装予定）
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            未対応: {summary.openFindingsCount} 件。Claude API を使った文書間の記載矛盾検知は
-            次のマイルストーンで追加します。
-          </p>
-        </CardContent>
-      </Card>
     </div>
   );
 }

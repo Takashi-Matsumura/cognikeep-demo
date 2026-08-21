@@ -14,7 +14,7 @@ function formatDate(ms: number | null): string {
 export default async function DashboardPage() {
   const stats = getDocumentStats();
   const jobCounts = getJobCounts();
-  const aiConverted = stats.byEngine.filter((e) => e.engine?.startsWith("claude:"));
+  const aiConverted = stats.byEngine.filter((e) => e.engine?.startsWith("local-llm:"));
   const aiConvertedCount = aiConverted.reduce((sum, e) => sum + e.count, 0);
 
   const freshness = listDocumentsWithFreshness();
@@ -93,7 +93,7 @@ export default async function DashboardPage() {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
         <Link href="/governance/duplicates">
           <Card className="transition-colors hover:bg-secondary/50">
             <CardHeader className="pb-2">
@@ -103,6 +103,16 @@ export default async function DashboardPage() {
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-semibold">{summary.duplicateOpenCount}</div>
+            </CardContent>
+          </Card>
+        </Link>
+        <Link href="/governance/contradictions">
+          <Card className="transition-colors hover:bg-secondary/50">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">矛盾候補</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-semibold">{summary.openFindingsCount}</div>
             </CardContent>
           </Card>
         </Link>

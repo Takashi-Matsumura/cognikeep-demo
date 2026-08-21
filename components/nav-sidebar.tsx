@@ -8,6 +8,7 @@ const NAV_ITEMS = [
   { href: "/dashboard", label: "ダッシュボード" },
   { href: "/search", label: "検索" },
   { href: "/documents", label: "文書一覧" },
+  { href: "/categories", label: "カテゴリ" },
   { href: "/governance", label: "統治" },
   { href: "/upload", label: "アップロード" },
   { href: "/jobs", label: "ジョブ" },
