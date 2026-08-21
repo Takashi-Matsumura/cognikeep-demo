@@ -2,6 +2,7 @@ import { getDb } from "../db/client.ts";
 import { processConvertJob } from "./handlers/convert.ts";
 import { processCategorizeProposeJob, processCategorizeClassifyAllJob } from "./handlers/categorize.ts";
 import { processContradictionScanJob } from "./handlers/contradiction.ts";
+import { processReembedAllJob } from "./handlers/reembed.ts";
 
 interface JobRow {
   id: string;
@@ -53,6 +54,10 @@ async function processNextJob(): Promise<boolean> {
       }
       case "contradiction_scan": {
         await processContradictionScanJob(job.id);
+        break;
+      }
+      case "reembed_all": {
+        await processReembedAllJob(job.id);
         break;
       }
       default:

@@ -139,8 +139,15 @@ export interface GroupedSearchResult {
   extraHitCount: number;
 }
 
-/** 検索結果を文書単位でグルーピングし、上位数件だけ残す（検索結果一覧の表示用） */
-export function groupHitsByDocument(hits: SearchHit[], maxPerDoc = 2): GroupedSearchResult[] {
+/**
+ * 検索結果を文書単位でグルーピングし、上位数件だけ残す（検索結果一覧の表示用）。
+ * bm25 は小さいほど良い（asc）、RRF は大きいほど良い（desc）なので呼び出し側で指定する。
+ */
+export function groupHitsByDocument(
+  hits: SearchHit[],
+  maxPerDoc = 2,
+  order: "asc" | "desc" = "asc",
+): GroupedSearchResult[] {
   const byDoc = new Map<string, SearchHit[]>();
   for (const hit of hits) {
     const list = byDoc.get(hit.documentId) ?? [];
@@ -148,9 +155,11 @@ export function groupHitsByDocument(hits: SearchHit[], maxPerDoc = 2): GroupedSe
     byDoc.set(hit.documentId, list);
   }
 
+  const compare = order === "asc" ? (a: SearchHit, b: SearchHit) => a.score - b.score : (a: SearchHit, b: SearchHit) => b.score - a.score;
+
   const grouped: GroupedSearchResult[] = [];
   for (const [documentId, docHits] of byDoc) {
-    docHits.sort((a, b) => a.score - b.score);
+    docHits.sort(compare);
     const shown = docHits.slice(0, maxPerDoc);
     grouped.push({
       documentId,
@@ -164,6 +173,26 @@ export function groupHitsByDocument(hits: SearchHit[], maxPerDoc = 2): GroupedSe
     });
   }
 
-  grouped.sort((a, b) => a.bestScore - b.bestScore);
+  grouped.sort(order === "asc" ? (a, b) => a.bestScore - b.bestScore : (a, b) => b.bestScore - a.bestScore);
   return grouped;
+}
+
+/** chunkId のリストから検索結果と同じ形（score以外）のメタデータを一括取得する */
+export function getChunksByIds(chunkIds: number[]): Omit<SearchHit, "score">[] {
+  if (chunkIds.length === 0) return [];
+  const db = getDb();
+  const placeholders = chunkIds.map(() => "?").join(",");
+  const sql = `
+    SELECT
+      c.id as chunkId, c.document_id as documentId, c.version_id as versionId,
+      c.heading_path as headingPath, c.heading_anchor as headingAnchor,
+      c.page_from as pageFrom, c.page_to as pageTo, c.text as text,
+      d.title as title, d.doc_type as docType, d.freshness_score as freshnessScore,
+      v.conversion_engine as conversionEngine
+    FROM chunks c
+    JOIN documents d ON d.id = c.document_id
+    JOIN document_versions v ON v.id = c.version_id
+    WHERE c.id IN (${placeholders}) AND d.status != 'archived'
+  `;
+  return db.prepare(sql).all(...chunkIds) as unknown as Omit<SearchHit, "score">[];
 }

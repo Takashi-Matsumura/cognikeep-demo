@@ -1,9 +1,15 @@
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { searchChunks, groupHitsByDocument } from "@/lib/search/fts";
+import { hybridSearch, type HybridSearchHit } from "@/lib/search/hybrid";
+import { groupHitsByDocument } from "@/lib/search/fts";
 import { highlightText } from "@/lib/search/highlight";
+import { countChunksWithoutEmbedding } from "@/lib/search/vector";
 import { ConversionBadge } from "@/components/conversion-badge";
+import { reembedAllAction } from "@/app/actions/search";
+import { AutoRefresh } from "@/components/auto-refresh";
+import { listRecentJobs } from "@/lib/db/queries/jobs";
 
 function Highlighted({ text, query }: { text: string; query: string }) {
   const snippets = highlightText(text, query, { windowSize: 140, maxSnippets: 1 });
@@ -26,23 +32,49 @@ function Highlighted({ text, query }: { text: string; query: string }) {
   );
 }
 
+const MATCH_LABEL: Record<HybridSearchHit["matchedBy"][number], string> = {
+  keyword: "キーワード一致",
+  semantic: "意味的に類似",
+};
+
 export default async function SearchPage(props: PageProps<"/search">) {
   const { q } = await props.searchParams;
   const query = typeof q === "string" ? q : "";
 
-  const hits = query ? searchChunks(query, {}, 50) : [];
-  const grouped = groupHitsByDocument(hits);
+  const hits = query ? await hybridSearch(query, {}, 50) : [];
+  const grouped = groupHitsByDocument(hits, 2, "desc");
+
+  const unembeddedCount = countChunksWithoutEmbedding();
+  const reembedActive = listRecentJobs(5).some(
+    (j) => j.kind === "reembed_all" && (j.status === "queued" || j.status === "running"),
+  );
 
   return (
     <div className="flex flex-col gap-6">
+      {reembedActive && <AutoRefresh intervalMs={2000} />}
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">検索</h1>
         {query && (
           <p className="text-sm text-muted-foreground">
-            「{query}」の検索結果: {grouped.length} 文書 / {hits.length} 箇所
+            「{query}」の検索結果: {grouped.length} 文書 / {hits.length} 箇所（キーワード + 意味検索）
           </p>
         )}
       </div>
+
+      {unembeddedCount > 0 && (
+        <Card>
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 py-3">
+            <p className="text-sm text-muted-foreground">
+              {unembeddedCount} 件のチャンクがまだ埋め込まれていません（意味検索の対象外）。
+            </p>
+            <form action={reembedAllAction}>
+              <Button type="submit" variant="outline" size="sm" disabled={reembedActive}>
+                {reembedActive ? "埋め込み中…" : "埋め込みを実行"}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      )}
 
       {!query ? (
         <p className="text-sm text-muted-foreground">
@@ -71,6 +103,11 @@ export default async function SearchPage(props: PageProps<"/search">) {
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
                         {hit.headingPath && <span>{hit.headingPath}</span>}
                         {hit.pageFrom != null && <span>p.{hit.pageFrom}</span>}
+                        {(hit as HybridSearchHit).matchedBy?.map((m) => (
+                          <Badge key={m} variant="secondary" className="text-[10px]">
+                            {MATCH_LABEL[m]}
+                          </Badge>
+                        ))}
                       </div>
                       <Highlighted text={hit.text} query={query} />
                     </div>
